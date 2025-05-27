@@ -6,6 +6,7 @@
 #include <AFMotor.h>
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
+#include "HUSKYLENS.h"
 
 class RN_Sport {
 public:
@@ -15,6 +16,16 @@ public:
     // Setup and initialization
     bool begin();
     void calibrateGyro();
+    bool beginCamera();  // New function for camera initialization
+
+    // Camera functions
+    bool isObjectDetected();
+    int getObjectX();
+    int getObjectY();
+    int getObjectWidth();
+    int getObjectHeight();
+    bool isColorLearned();
+    void setCameraAlgorithm(int algorithm);
 
     // I2C Scanner functions
     void scanI2CDevices();
@@ -63,6 +74,11 @@ private:
     float lastGyroZ;
     float targetYaw;
 
+    // Camera setup
+    HUSKYLENS huskylens;
+    bool cameraInitialized;
+    HUSKYLENSResult lastResult;
+
     // Motor setup
     AF_DCMotor motorRight;
     AF_DCMotor motorLeft;
@@ -102,6 +118,7 @@ private:
 
     // Helper functions
     void adjustMotorSpeeds();
+    bool updateCameraData();  // New helper function for camera
 };
 
 #endif 

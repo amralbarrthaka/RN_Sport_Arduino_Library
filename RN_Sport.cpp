@@ -407,4 +407,71 @@ void RN_Sport::rotateRightWithGyro(float targetAngle) {
     motorRight.run(FORWARD);
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
+}
+
+bool RN_Sport::beginCamera() {
+    Wire.begin();
+    if (!huskylens.begin(Wire)) {
+        return false;
+    }
+    cameraInitialized = true;
+    return true;
+}
+
+bool RN_Sport::updateCameraData() {
+    if (!cameraInitialized) return false;
+    
+    if (!huskylens.request()) {
+        return false;
+    }
+    
+    if (!huskylens.available()) {
+        return false;
+    }
+    
+    lastResult = huskylens.read();
+    return true;
+}
+
+bool RN_Sport::isObjectDetected() {
+    return updateCameraData();
+}
+
+int RN_Sport::getObjectX() {
+    if (updateCameraData()) {
+        return lastResult.xCenter;
+    }
+    return -1;
+}
+
+int RN_Sport::getObjectY() {
+    if (updateCameraData()) {
+        return lastResult.yCenter;
+    }
+    return -1;
+}
+
+int RN_Sport::getObjectWidth() {
+    if (updateCameraData()) {
+        return lastResult.width;
+    }
+    return -1;
+}
+
+int RN_Sport::getObjectHeight() {
+    if (updateCameraData()) {
+        return lastResult.height;
+    }
+    return -1;
+}
+
+bool RN_Sport::isColorLearned() {
+    if (!cameraInitialized) return false;
+    return huskylens.isLearned();
+}
+
+void RN_Sport::setCameraAlgorithm(int algorithm) {
+    if (cameraInitialized) {
+        huskylens.writeAlgorithm(algorithm);
+    }
 } 
