@@ -21,7 +21,7 @@ void setup() {
     // Set movement speed (0-255)
     robot.setMovementSpeed(100);
     
-    delay(2000);
+    delay(1000);
 }
 
 void loop() {

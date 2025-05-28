@@ -20,7 +20,6 @@ RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int baseSpeed)
     isForward = false;
     isBackward = false;
     isRotating = false;
-    rotationTimeout = 0;  // Explicitly set timeout to 0 (disabled) by default
     lastPrintTime = 0;
     lastUpdateTime = 0;
     lastStateChange = 0;
@@ -183,10 +182,9 @@ void RN_Sport::stopMotors() {
     isForward = false;
     isBackward = false;
     isRotating = false;
-    if (directChange()) {
-        motorLeft.run(RELEASE);
-        motorRight.run(RELEASE);
-    }
+    motorLeft.run(RELEASE);
+    motorRight.run(RELEASE);
+
 }
 
 void RN_Sport::rotateLeft() {
@@ -367,29 +365,75 @@ void RN_Sport::moveBackwardWithGyro() {
 }
 
 void RN_Sport::rotateLeftWithGyro(float targetAngle) {
+    // Set movement state
     isForward = false;
     isBackward = false;
     isRotating = true;
-
-    targetYaw = fmod(yaw + targetAngle, 360.0);
+    
+    // Calculate target angle with proper normalization
+    // For left rotation, we subtract the angle (clockwise)
+    targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);
+    
+    // Set motor directions and speeds
     motorLeft.run(BACKWARD);
     motorRight.run(BACKWARD);
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
     
+    // Execute rotation with timeout and error handling
+    bool rotationComplete = handleRotation(targetAngle, DIR_LEFT);
+    
+    // Update state and provide feedback
+    isRotating = false;
+    Serial.print("Left rotation ");
+    Serial.println(rotationComplete ? "completed successfully" : "timed out with error");
 }
 
 void RN_Sport::rotateRightWithGyro(float targetAngle) {
+    // Set movement state
     isForward = false;
     isBackward = false;
     isRotating = true;
-  
-    targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);
+    
+    // Calculate target angle with proper normalization
+    // For right rotation, we add the angle (counter-clockwise)
+    targetYaw = fmod(yaw + targetAngle + 360.0, 360.0);
+    
+    // Set motor directions and speeds
+    // For right rotation, left motor forward, right motor backward
     motorLeft.run(FORWARD);
     motorRight.run(FORWARD);
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
-  
+    
+    // Execute rotation with timeout and error handling
+    bool rotationComplete = handleRotation(targetAngle, DIR_RIGHT);
+    
+    // Update state and provide feedback
+    isRotating = false;
+    Serial.print("Right rotation ");
+    Serial.println(rotationComplete ? "completed successfully" : "timed out with error");
+}
+
+bool RN_Sport::handleRotation(float angle, MovementDirection direction) {
+    const unsigned long ROTATION_TIMEOUT = 5000;  // 5 second timeout
+    const float ROTATION_TOLERANCE = 2.0;        // 2 degree tolerance
+    
+    unsigned long startTime = millis();
+    bool rotationComplete = false;
+    
+    // Monitor rotation until complete or timeout
+    while (!rotationComplete && (millis() - startTime < ROTATION_TIMEOUT)) {
+        updateGyro();
+        rotationComplete = checkRotationComplete(ROTATION_TOLERANCE);
+
+    }
+    
+    // Stop motors if rotation is complete or timed out
+    stopMotors();
+    isRotating = false;
+    
+    return rotationComplete;
 }
 
 bool RN_Sport::checkRotationComplete(float tolerance) {
@@ -399,8 +443,14 @@ bool RN_Sport::checkRotationComplete(float tolerance) {
     if (angleError > 180) angleError -= 360;
     if (angleError < -180) angleError += 360;
     
-    // Check if we're within tolerance
-    return abs(angleError) <= tolerance;
+    // Check if we're within tolerance and log the error for debugging
+    bool isComplete = abs(angleError) <= tolerance;
+    if (!isComplete) {
+        Serial.print("Angle error: ");
+        Serial.println(angleError);
+    }
+    
+    return isComplete;
 }
 
 bool RN_Sport::beginCamera() {
@@ -470,27 +520,5 @@ void RN_Sport::setCameraAlgorithm(int algorithm) {
     }
 }
 
-void RN_Sport::setLeftRightRotationTimeout(unsigned long timeout) {
-    rotationTimeout = timeout;
-}
 
-bool RN_Sport::handleRotation(void (RN_Sport::*rotateFunc)(float), float angle, float tolerance, unsigned long timeout) {
-    unsigned long startTime = millis();
-    bool rotationComplete = false;
-    
-    // Start rotation
-    (this->*rotateFunc)(angle);
-    
-    // Monitor rotation until complete or timeout
-    while (!rotationComplete && (millis() - startTime < timeout)) {
-        updateGyro();
-        rotationComplete = checkRotationComplete(tolerance);
-        delay(10);  // Small delay to prevent too rapid updates
-    }
-    
-    // Stop motors if rotation is complete or timed out
-    stopMotors();
-    isRotating = false;
-    
-    return rotationComplete;
-} 
+

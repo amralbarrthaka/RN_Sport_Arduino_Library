@@ -63,11 +63,9 @@ public:
    
     void setMovementSpeed(int speed);
 
-    void setLeftRightRotationTimeout(unsigned long timeout);
-    unsigned long getLeftRightRotationTimeout() { return rotationTimeout; }
     bool checkRotationComplete(float tolerance);
     bool isRotating;
-    bool handleRotation(void (RN_Sport::*rotateFunc)(float), float angle, float tolerance, unsigned long timeout);
+    bool handleRotation(float angle, MovementDirection direction);
 
     // Movement sequence
     void startMovementSequence();
@@ -105,7 +103,6 @@ private:
     float Kp;
     bool isForward;
     bool isBackward;
-    unsigned long rotationTimeout;
     MovementDirection currentDirection;  // Current movement direction
 
     // Timing variables
