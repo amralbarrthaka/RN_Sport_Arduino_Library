@@ -1,43 +1,61 @@
 #include "RN_Sport.h"
+#include <Arduino.h>
+#include <Wire.h>
+#include <AFMotor.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include "HUSKYLENS.h"
 
 RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int baseSpeed) 
     : motorRight(rightMotorPin), motorLeft(leftMotorPin), baseSpeed(baseSpeed) {
     // Initialize member variables
     yaw = 0.0;
-    gyroZOffset = 0.0;
+    correctionValueGyro = 0.0;
     lastMicros = 0;
     lastGyroZ = 0.0;
     targetYaw = 0.0;
     leftSpeed = baseSpeed;
     rightSpeed = baseSpeed;
-    Kp = 2.0;
+    Kp = 10.0;
     isForward = false;
     isBackward = false;
     isRotating = false;
+    rotationTimeout = 0;  // Explicitly set timeout to 0 (disabled) by default
     lastPrintTime = 0;
     lastUpdateTime = 0;
     lastStateChange = 0;
-    currentState = FORWARD_3S;
+    totalCorrectionValueGyro = 0;
+    currentDirection = DIR_STOP;  // Initialize to stopped
 }
 
 bool RN_Sport::begin() {
-    motorLeft.setSpeed(baseSpeed);
-    motorRight.setSpeed(baseSpeed);
-
+    // Initialize I2C
+    Wire.begin();
+    
+    // Initialize motors
+    motorLeft.setSpeed(0);
+    motorRight.setSpeed(0);
+    motorLeft.run(RELEASE);
+    motorRight.run(RELEASE);
+    
+    // Initialize MPU6050
     if (!mpu.begin()) {
+        Serial.println("Failed to initialize MPU6050");
         return false;
     }
-
+    
+    // Configure MPU6050 settings
     mpu.setGyroRange(MPU6050_RANGE_250_DEG);
     mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
-    delay(1000); // Stabilize
-    calibrateGyro();
-    lastMicros = micros();
-    targetYaw = yaw;
     
+    // Initialize timing variables
+    lastMicros = micros();
     lastPrintTime = millis();
     lastUpdateTime = millis();
     lastStateChange = millis();
+    
+    // Initialize camera flag
+    cameraInitialized = false;
     
     return true;
 }
@@ -50,8 +68,31 @@ void RN_Sport::setFilterBandwidth(mpu6050_bandwidth_t bandwidth) {
     mpu.setFilterBandwidth(bandwidth);
 }
 
-void RN_Sport::calibrateGyro() {
-    Serial.println("Calibrating gyroscope (keep sensor still)...");
+void RN_Sport::initializeGyro() {
+    Serial.println("Initializing MPU6050...");
+    // Initialize MPU6050
+    if (!mpu.begin()) {
+        Serial.println("Failed to initialize MPU6050");
+        return;
+    }
+    
+    // Configure MPU6050 settings
+    mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+    
+    // Wait for sensor to stabilize
+    delay(1000);
+    
+    // Initialize timing and target values
+    lastMicros = micros();
+    targetYaw = yaw;
+    
+    Serial.println("MPU6050 initialized successfully");
+    correctGyro();
+}
+
+void RN_Sport::correctGyro() {
+    Serial.println("Correcting gyroscope (keep sensor still)...");
     float sum = 0.0;
     const int samples = 500;  // Increased samples for better calibration
 
@@ -62,12 +103,13 @@ void RN_Sport::calibrateGyro() {
         delay(5);
     }
 
-    gyroZOffset = sum / samples;
-    Serial.print("Gyro Z offset: ");
-    Serial.println(gyroZOffset, 6);
+    correctionValueGyro = sum/samples;
+    Serial.print("Gyro Correction Value : ");
+    Serial.println(correctionValueGyro, 6);
+    delay(1000);
 }
 
-void RN_Sport::updateYaw() {
+void RN_Sport::updateGyro() {
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
 
@@ -75,13 +117,9 @@ void RN_Sport::updateYaw() {
     float deltaTime = (currentMicros - lastMicros) / 1000000.0; // convert to seconds
     lastMicros = currentMicros;
 
-    // Get gyro reading and apply offset
-    float gyroZ = g.gyro.z - gyroZOffset;
-
-    // Drift compensation
-    if (abs(gyroZ) < 0.001) {  // If rotation is very small
-        gyroZ = 0;  // Ignore tiny movements
-    }
+    // Get gyro reading and apply drift compensation
+    float gyroZ = g.gyro.z - correctionValueGyro;
+    
 
     // Integrate gyro.z to estimate yaw
     yaw += gyroZ * (180.0 / PI) * deltaTime;
@@ -92,33 +130,40 @@ void RN_Sport::updateYaw() {
 }
 
 void RN_Sport::adjustMotorSpeeds() {
+    // Skip adjustment if robot is rotating
     if (isRotating) return;
 
+    // Calculate angle error and normalize to [-180, 180]
     float angleError = yaw - targetYaw;
     if (angleError > 180) angleError -= 360;
     if (angleError < -180) angleError += 360;
 
-    int rawCorrection = Kp * angleError;
-    int maxCorrection = min(baseSpeed, 255 - baseSpeed);
-    int correction = constrain(rawCorrection, -maxCorrection, maxCorrection);
+    // Calculate proportional correction
+    int correction = Kp * angleError;
     
+    // Log correction value for debugging
+    // Serial.print("Correction: ");
+    // Serial.println(correction);
+
+    // Apply correction based on movement direction
     if (isForward) {
-        leftSpeed = baseSpeed - correction;
-        rightSpeed = baseSpeed + correction;
+        leftSpeed = baseSpeed - correction;  // Reduce left speed if turning right
+        rightSpeed = baseSpeed + correction; // Increase right speed if turning right
     } else if (isBackward) {
-        leftSpeed = baseSpeed + correction;
-        rightSpeed = baseSpeed - correction;
+        leftSpeed = baseSpeed + correction;  // Increase left speed if turning right
+        rightSpeed = baseSpeed - correction; // Reduce right speed if turning right
     }
 
+    // Ensure speeds stay within valid range
     leftSpeed = constrain(leftSpeed, 0, 255);
     rightSpeed = constrain(rightSpeed, 0, 255);
 
+    // Apply calculated speeds to motors
     motorLeft.setSpeed(leftSpeed);
     motorRight.setSpeed(rightSpeed);
 }
 
 void RN_Sport::moveForward() {
-    targetYaw = yaw;
     isForward = true;
     isBackward = false;
     isRotating = false;
@@ -127,7 +172,6 @@ void RN_Sport::moveForward() {
 }
 
 void RN_Sport::moveBackward() {
-    targetYaw = yaw;
     isForward = false;
     isBackward = true;
     isRotating = false;
@@ -139,8 +183,10 @@ void RN_Sport::stopMotors() {
     isForward = false;
     isBackward = false;
     isRotating = false;
-    motorLeft.run(RELEASE);
-    motorRight.run(RELEASE);
+    if (directChange()) {
+        motorLeft.run(RELEASE);
+        motorRight.run(RELEASE);
+    }
 }
 
 void RN_Sport::rotateLeft() {
@@ -163,120 +209,22 @@ void RN_Sport::rotateRight() {
     motorRight.setSpeed(baseSpeed);
 }
 
-void RN_Sport::startMovementSequence() {
-    currentState = FORWARD_3S;
-    lastStateChange = millis();
-    moveForward();
-}
-
-void RN_Sport::updateMovementState() {
-    unsigned long currentTime = millis();
-    unsigned long elapsedTime = currentTime - lastStateChange;
-
-    switch(currentState) {
-        case FORWARD_3S:
-            if (elapsedTime >= 3000) {
-                stopMotors();
-                currentState = STOP_1S;
-                lastStateChange = currentTime;
-            }
-            break;
-
-        case STOP_1S:
-            if (elapsedTime >= 1000) {
-                moveBackward();
-                currentState = BACKWARD_0_5S;
-                lastStateChange = currentTime;
-            }
-            break;
-
-        case BACKWARD_0_5S:
-            if (elapsedTime >= 500) {
-                rotateLeft();
-                currentState = ROTATE_LEFT_180;
-                lastStateChange = currentTime;
-                targetYaw = fmod(yaw + 180.0, 360.0);
-            }
-            break;
-
-        case ROTATE_LEFT_180:
-            if (abs(yaw - targetYaw) < 5.0) {
-                moveForward();
-                currentState = FORWARD_3S_2;
-                lastStateChange = currentTime;
-            } else if (elapsedTime >= ROTATION_TIMEOUT) {
-                rotateRight();
-                currentState = ROTATE_RIGHT_180_FROM_LEFT;
-                lastStateChange = currentTime;
-                targetYaw = fmod(yaw + 180.0, 360.0);
-            }
-            break;
-
-        case ROTATE_RIGHT_180_FROM_LEFT:
-            if (abs(yaw - targetYaw) < 5.0) {
-                moveForward();
-                currentState = FORWARD_3S_2;
-                lastStateChange = currentTime;
-            } else if (elapsedTime >= ROTATION_TIMEOUT) {
-                moveForward();
-                currentState = FORWARD_3S_2;
-                lastStateChange = currentTime;
-            }
-            break;
-
-        case FORWARD_3S_2:
-            if (elapsedTime >= 3000) {
-                stopMotors();
-                currentState = STOP_1S_2;
-                lastStateChange = currentTime;
-            }
-            break;
-
-        case STOP_1S_2:
-            if (elapsedTime >= 1000) {
-                moveBackward();
-                currentState = BACKWARD_0_5S_2;
-                lastStateChange = currentTime;
-            }
-            break;
-
-        case BACKWARD_0_5S_2:
-            if (elapsedTime >= 500) {
-                rotateRight();
-                currentState = ROTATE_RIGHT_180;
-                lastStateChange = currentTime;
-                targetYaw = fmod(yaw + 180.0, 360.0);
-            }
-            break;
-
-        case ROTATE_RIGHT_180:
-            if (abs(yaw - targetYaw) < 5.0) {
-                moveForward();
-                currentState = FORWARD_3S;
-                lastStateChange = currentTime;
-            } else if (elapsedTime >= ROTATION_TIMEOUT) {
-                rotateLeft();
-                currentState = ROTATE_LEFT_180_FROM_RIGHT;
-                lastStateChange = currentTime;
-                targetYaw = fmod(yaw + 180.0, 360.0);
-            }
-            break;
-
-        case ROTATE_LEFT_180_FROM_RIGHT:
-            if (abs(yaw - targetYaw) < 5.0) {
-                moveForward();
-                currentState = FORWARD_3S;
-                lastStateChange = currentTime;
-            } else if (elapsedTime >= ROTATION_TIMEOUT) {
-                moveForward();
-                currentState = FORWARD_3S;
-                lastStateChange = currentTime;
-            }
-            break;
+void RN_Sport::printGyroMotorStatus() {
+    
+    // Only print if moving with gyro control
+    if (!isForward && !isBackward) {
+        return;
     }
-}
 
-void RN_Sport::printStatus() {
+
+    // Check if it's time to print (every 1 second)
+    unsigned long currentTime = millis();
+    if (currentTime - lastPrintTime < 1000) {
+        return;
+    }
+    lastPrintTime = currentTime;
+
+    // Print status information
     Serial.print("Yaw: ");
     Serial.print(yaw, 2);
     Serial.print("° Target: ");
@@ -285,19 +233,8 @@ void RN_Sport::printStatus() {
     Serial.print(leftSpeed);
     Serial.print(" Right: ");
     Serial.print(rightSpeed);
-    Serial.print(" State: ");
-    switch(currentState) {
-        case FORWARD_3S: Serial.println("Forward 3s"); break;
-        case STOP_1S: Serial.println("Stop 1s"); break;
-        case BACKWARD_0_5S: Serial.println("Backward 0.5s"); break;
-        case ROTATE_LEFT_180: Serial.println("Rotate Left 180°"); break;
-        case ROTATE_RIGHT_180_FROM_LEFT: Serial.println("Rotate Right 180° (recovery)"); break;
-        case FORWARD_3S_2: Serial.println("Forward 3s (2)"); break;
-        case STOP_1S_2: Serial.println("Stop 1s (2)"); break;
-        case BACKWARD_0_5S_2: Serial.println("Backward 0.5s (2)"); break;
-        case ROTATE_RIGHT_180: Serial.println("Rotate Right 180°"); break;
-        case ROTATE_LEFT_180_FROM_RIGHT: Serial.println("Rotate Left 180° (recovery)"); break;
-    }
+    Serial.print(" Direction: ");
+    Serial.println(isForward ? "Forward" : "Backward");
 }
 
 void RN_Sport::scanI2CDevices() {
@@ -357,56 +294,113 @@ void RN_Sport::printI2CDeviceInfo(byte address) {
     }
 }
 
-void RN_Sport::setBaseSpeed(int speed) {
+void RN_Sport::setMovementSpeed(int speed) {
     baseSpeed = constrain(speed, 0, 255);
     leftSpeed = baseSpeed;
     rightSpeed = baseSpeed;
 }
 
-void RN_Sport::setGyroGain(float gain) {
-    Kp = gain;
+bool RN_Sport::directChange() {
+    MovementDirection newDirection;
+    
+    if (isForward) {
+        newDirection = DIR_FORWARD;
+    } else if (isBackward) {
+        newDirection = DIR_BACKWARD;
+    } else {
+        newDirection = DIR_STOP;
+    }
+    
+    if (newDirection != currentDirection) {
+        currentDirection = newDirection;
+        Serial.print("Direction changed to: ");
+        switch(currentDirection) {
+            case DIR_STOP:
+                Serial.println("STOP");
+                break;
+            case DIR_FORWARD:
+                Serial.println("FORWARD");
+                break;
+            case DIR_BACKWARD:
+                Serial.println("BACKWARD");
+                break;
+            case DIR_LEFT:
+                Serial.println("LEFT");
+                break;
+            case DIR_RIGHT:
+                Serial.println("RIGHT");
+                break;
+        }
+        return true;
+    }
+    return false;
 }
 
 void RN_Sport::moveForwardWithGyro() {
-    targetYaw = yaw;  // Set target heading to current heading
-    isForward = true;
-    isBackward = false;
-    isRotating = false;
-    motorLeft.run(FORWARD);
-    motorRight.run(BACKWARD);
-    adjustMotorSpeeds();  // Apply initial correction
+        isForward = true;
+        isBackward = false;
+        isRotating = false;
+    if (directChange()) {
+        targetYaw = yaw;
+        motorLeft.run(FORWARD);
+        motorRight.run(BACKWARD);
+    }
+    
+    updateGyro();  // Update current yaw
+    adjustMotorSpeeds();  // Adjust speeds to maintain straight path
+    printGyroMotorStatus();  // Print status information
 }
 
 void RN_Sport::moveBackwardWithGyro() {
-    targetYaw = yaw;  // Set target heading to current heading
     isForward = false;
     isBackward = true;
     isRotating = false;
-    motorLeft.run(BACKWARD);
-    motorRight.run(FORWARD);
-    adjustMotorSpeeds();  // Apply initial correction
+    if (directChange()) {
+        targetYaw = yaw;
+        motorLeft.run(BACKWARD);
+        motorRight.run(FORWARD);
+    }
+    
+    updateGyro();  // Update current yaw
+    adjustMotorSpeeds();  // Adjust speeds to maintain straight path
+    printGyroMotorStatus();  // Print status information
 }
 
 void RN_Sport::rotateLeftWithGyro(float targetAngle) {
     isForward = false;
     isBackward = false;
     isRotating = true;
-    targetYaw = fmod(yaw + targetAngle, 360.0);  // Calculate target angle
+
+    targetYaw = fmod(yaw + targetAngle, 360.0);
     motorLeft.run(BACKWARD);
     motorRight.run(BACKWARD);
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
+    
 }
 
 void RN_Sport::rotateRightWithGyro(float targetAngle) {
     isForward = false;
     isBackward = false;
     isRotating = true;
-    targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);  // Calculate target angle
+  
+    targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);
     motorLeft.run(FORWARD);
     motorRight.run(FORWARD);
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
+  
+}
+
+bool RN_Sport::checkRotationComplete(float tolerance) {
+    float angleError = yaw - targetYaw;
+    
+    // Normalize angle error to [-180, 180]
+    if (angleError > 180) angleError -= 360;
+    if (angleError < -180) angleError += 360;
+    
+    // Check if we're within tolerance
+    return abs(angleError) <= tolerance;
 }
 
 bool RN_Sport::beginCamera() {
@@ -474,4 +468,29 @@ void RN_Sport::setCameraAlgorithm(int algorithm) {
     if (cameraInitialized) {
         huskylens.writeAlgorithm(algorithm);
     }
+}
+
+void RN_Sport::setLeftRightRotationTimeout(unsigned long timeout) {
+    rotationTimeout = timeout;
+}
+
+bool RN_Sport::handleRotation(void (RN_Sport::*rotateFunc)(float), float angle, float tolerance, unsigned long timeout) {
+    unsigned long startTime = millis();
+    bool rotationComplete = false;
+    
+    // Start rotation
+    (this->*rotateFunc)(angle);
+    
+    // Monitor rotation until complete or timeout
+    while (!rotationComplete && (millis() - startTime < timeout)) {
+        updateGyro();
+        rotationComplete = checkRotationComplete(tolerance);
+        delay(10);  // Small delay to prevent too rapid updates
+    }
+    
+    // Stop motors if rotation is complete or timed out
+    stopMotors();
+    isRotating = false;
+    
+    return rotationComplete;
 } 

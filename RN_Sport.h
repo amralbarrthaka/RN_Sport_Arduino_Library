@@ -10,13 +10,25 @@
 
 class RN_Sport {
 public:
+    // Direction enum
+    enum MovementDirection {
+        DIR_STOP,
+        DIR_FORWARD,
+        DIR_BACKWARD,
+        DIR_LEFT,
+        DIR_RIGHT
+    };
+
     // Constructor
     RN_Sport(int leftMotorPin = 2, int rightMotorPin = 1, int baseSpeed = 150);
 
     // Setup and initialization
     bool begin();
-    void calibrateGyro();
     bool beginCamera();  // New function for camera initialization
+
+    // MPU6050 Configuration
+    void setGyroRange(mpu6050_gyro_range_t range);
+    void setFilterBandwidth(mpu6050_bandwidth_t bandwidth);
 
     // Camera functions
     bool isObjectDetected();
@@ -39,40 +51,43 @@ public:
     void rotateLeft();
     void rotateRight();
 
-    // Movement functions with gyro control
+    void initializeGyro();
+    void updateGyro();
+
     void moveForwardWithGyro();
     void moveBackwardWithGyro();
+    void printGyroMotorStatus();
+
     void rotateLeftWithGyro(float targetAngle);
     void rotateRightWithGyro(float targetAngle);
-    void setBaseSpeed(int speed);
-    void setGyroGain(float gain);
+   
+    void setMovementSpeed(int speed);
+
+    void setLeftRightRotationTimeout(unsigned long timeout);
+    unsigned long getLeftRightRotationTimeout() { return rotationTimeout; }
+    bool checkRotationComplete(float tolerance);
+    bool isRotating;
+    bool handleRotation(void (RN_Sport::*rotateFunc)(float), float angle, float tolerance, unsigned long timeout);
 
     // Movement sequence
     void startMovementSequence();
-    void updateMovementState();
-    void printStatus();
 
     // Getter functions
     float getYaw() { return yaw; }
     float getTargetYaw() { return targetYaw; }
     int getLeftSpeed() { return leftSpeed; }
     int getRightSpeed() { return rightSpeed; }
-
-    // MPU6050 Configuration
-    void setGyroRange(mpu6050_gyro_range_t range);
-    void setFilterBandwidth(mpu6050_bandwidth_t bandwidth);
-    
-    // Yaw update function
-    void updateYaw();
+    MovementDirection getCurrentDirection() { return currentDirection; }
 
 private:
     // MPU6050 setup
     Adafruit_MPU6050 mpu;
     float yaw;
-    float gyroZOffset;
+    float correctionValueGyro;
     unsigned long lastMicros;
     float lastGyroZ;
     float targetYaw;
+    float totalCorrectionValueGyro;
 
     // Camera setup
     HUSKYLENS huskylens;
@@ -90,7 +105,8 @@ private:
     float Kp;
     bool isForward;
     bool isBackward;
-    bool isRotating;
+    unsigned long rotationTimeout;
+    MovementDirection currentDirection;  // Current movement direction
 
     // Timing variables
     unsigned long lastPrintTime;
@@ -98,27 +114,12 @@ private:
     unsigned long lastUpdateTime;
     const unsigned long UPDATE_INTERVAL = 10;
     unsigned long lastStateChange;
-    const unsigned long ROTATION_TIMEOUT = 3000;
-
-    // Movement states
-    enum MovementState {
-        FORWARD_3S,
-        STOP_1S,
-        BACKWARD_0_5S,
-        ROTATE_LEFT_180,
-        ROTATE_RIGHT_180_FROM_LEFT,
-        FORWARD_3S_2,
-        STOP_1S_2,
-        BACKWARD_0_5S_2,
-        ROTATE_RIGHT_180,
-        ROTATE_LEFT_180_FROM_RIGHT
-    };
-
-    MovementState currentState;
 
     // Helper functions
     void adjustMotorSpeeds();
-    bool updateCameraData();  // New helper function for camera
+    bool updateCameraData();  // Helper function for camera
+    void correctGyro();  // Private calibration function
+    bool directChange();  // Check if direction has changed
 };
 
 #endif 

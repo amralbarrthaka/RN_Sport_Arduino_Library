@@ -33,26 +33,12 @@ void setup() {
       delay(10);
     }
   }
-  
-  Serial.println("RN_Sport initialized successfully!");
-  
-  // Configure MPU6050
-  robot.setGyroRange(MPU6050_RANGE_250_DEG);
-  robot.setFilterBandwidth(MPU6050_BAND_21_HZ);
-  
-  // Wait for sensor to stabilize
-  delay(1000);
-  
-  // Calibrate the gyroscope
-  robot.calibrateGyro();
-  
-  // Initialize timing
-  lastMicros = micros();
+  robot.initializeGyro();
 }
 
 void loop() {
   // Update the yaw angle
-  robot.updateYaw();
+  robot.updateGyro();
   
   // Get the current yaw angle
   float yaw = robot.getYaw();
@@ -61,7 +47,6 @@ void loop() {
   Serial.print("Yaw (Heading Estimate): ");
   Serial.print(yaw, 2);
   Serial.println("°");
-  
-  // Small delay to avoid spamming Serial
-  delay(10);
+
+
 }
