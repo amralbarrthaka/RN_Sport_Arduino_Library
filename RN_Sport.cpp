@@ -6,8 +6,8 @@
 #include <Adafruit_Sensor.h>
 #include "HUSKYLENS.h"
 
-RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int baseSpeed) 
-    : motorRight(rightMotorPin), motorLeft(leftMotorPin), baseSpeed(baseSpeed) {
+RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int kickMotorPin, int baseSpeed) 
+    : motorRight(rightMotorPin), motorLeft(leftMotorPin), motorKick(kickMotorPin), baseSpeed(baseSpeed) {
     // Initialize member variables
     yaw = 0.0;
     correctionValueGyro = 0.0;
@@ -16,6 +16,7 @@ RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int baseSpeed)
     targetYaw = 0.0;
     leftSpeed = baseSpeed;
     rightSpeed = baseSpeed;
+    kickSpeed = baseSpeed;  // Initialize kick speed
     Kp = 10.0;
     isForward = false;
     isBackward = false;
@@ -34,8 +35,10 @@ bool RN_Sport::begin() {
     // Initialize motors
     motorLeft.setSpeed(0);
     motorRight.setSpeed(0);
+    motorKick.setSpeed(0);
     motorLeft.run(RELEASE);
     motorRight.run(RELEASE);
+    motorKick.run(RELEASE);
     
     // Initialize MPU6050
     if (!mpu.begin()) {
@@ -298,6 +301,10 @@ void RN_Sport::setMovementSpeed(int speed) {
     rightSpeed = baseSpeed;
 }
 
+void RN_Sport::setKickSpeed(int speed) {
+    kickSpeed = constrain(speed, 0, 255);
+}
+
 bool RN_Sport::directChange() {
     MovementDirection newDirection;
     
@@ -518,6 +525,24 @@ void RN_Sport::setCameraAlgorithm(int algorithm) {
     if (cameraInitialized) {
         huskylens.writeAlgorithm(algorithm);
     }
+}
+
+void RN_Sport::kickForward() {
+    // Set kick motor direction and speed
+    motorKick.run(FORWARD);
+    motorKick.setSpeed(kickSpeed);
+}
+
+void RN_Sport::kickBackward() {
+    // Set kick motor direction and speed
+    motorKick.run(BACKWARD);
+    motorKick.setSpeed(kickSpeed);
+}
+
+void RN_Sport::stopKick() {
+    // Stop kick motor
+    motorKick.run(RELEASE);
+    motorKick.setSpeed(0);
 }
 
 

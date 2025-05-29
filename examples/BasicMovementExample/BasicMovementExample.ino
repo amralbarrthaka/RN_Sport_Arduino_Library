@@ -41,7 +41,7 @@ void setup() {
     Serial.println("RN_Sport initialized successfully!");
     
     // Set base speed
-    robot.setBaseSpeed(150);  // Set to 150 (0-255)
+    robot.setMovementSpeed(150);  // Set to 150 (0-255)
     
     // Wait for sensor to stabilize
     delay(1000);

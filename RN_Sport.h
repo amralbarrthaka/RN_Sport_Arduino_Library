@@ -20,7 +20,7 @@ public:
     };
 
     // Constructor
-    RN_Sport(int leftMotorPin = 2, int rightMotorPin = 1, int baseSpeed = 150);
+    RN_Sport(int leftMotorPin = 2, int rightMotorPin = 1, int kickMotorPin = 3, int baseSpeed = 150);
 
     // Setup and initialization
     bool begin();
@@ -50,6 +50,10 @@ public:
     void stopMotors();
     void rotateLeft();
     void rotateRight();
+    void kickForward();
+    void kickBackward();
+    void stopKick();
+    void setKickSpeed(int speed);
 
     void initializeGyro();
     void updateGyro();
@@ -95,11 +99,13 @@ private:
     // Motor setup
     AF_DCMotor motorRight;
     AF_DCMotor motorLeft;
+    AF_DCMotor motorKick;
 
     // Speed and direction control
     int baseSpeed;
     int leftSpeed;
     int rightSpeed;
+    int kickSpeed;
     float Kp;
     bool isForward;
     bool isBackward;
