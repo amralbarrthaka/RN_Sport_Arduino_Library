@@ -7,8 +7,6 @@
 // Create RN_Sport object with default settings
 RN_Sport robot;
 
-
-
 void setup() {
     // Initialize Serial communication
     Serial.begin(115200);

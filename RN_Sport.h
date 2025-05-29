@@ -7,6 +7,7 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include "HUSKYLENS.h"
+#include <Servo.h>
 
 class RN_Sport {
 public:
@@ -81,6 +82,16 @@ public:
     int getRightSpeed() { return rightSpeed; }
     MovementDirection getCurrentDirection() { return currentDirection; }
 
+    // Servo functions
+    void initializeTopServo(int pin, int defaultAngle, int minAngle, int maxAngle);
+    void initializeLowServo(int pin, int defaultAngle, int minAngle, int maxAngle);
+    void setTopServoAngle(int angle);
+    void setLowServoAngle(int angle);
+    void resetServos();
+    void setServoSpeed(int speed);  // Set speed for both servos (0-255)
+    bool isTopServoInitialized() { return topServoInitialized; }
+    bool isLowServoInitialized() { return lowServoInitialized; }
+
 private:
     // MPU6050 setup
     Adafruit_MPU6050 mpu;
@@ -123,6 +134,23 @@ private:
     bool updateCameraData();  // Helper function for camera
     void correctGyro();  // Private calibration function
     bool directChange();  // Check if direction has changed
+
+    // Servo setup
+    Servo topServo;
+    Servo lowServo;
+    bool topServoInitialized;
+    bool lowServoInitialized;
+    int topServoDefault;
+    int lowServoDefault;
+    int topServoMin;
+    int topServoMax;
+    int lowServoMin;
+    int lowServoMax;
+    int servoSpeed;  // Speed for both servos
+    unsigned long lastTopServoMove;
+    unsigned long lastLowServoMove;
+    int currentTopAngle;
+    int currentLowAngle;
 };
 
 #endif 

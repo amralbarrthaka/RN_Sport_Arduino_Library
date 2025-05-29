@@ -26,6 +26,13 @@ RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int kickMotorPin, int ba
     lastStateChange = 0;
     totalCorrectionValueGyro = 0;
     currentDirection = DIR_STOP;  // Initialize to stopped
+    
+    // Initialize servo variables
+    topServoInitialized = false;
+    lowServoInitialized = false;
+    servoSpeed = 255;  // Default to fastest speed
+    currentTopAngle = 0;
+    currentLowAngle = 0;
 }
 
 bool RN_Sport::begin() {
@@ -543,6 +550,125 @@ void RN_Sport::stopKick() {
     // Stop kick motor
     motorKick.run(RELEASE);
     motorKick.setSpeed(0);
+}
+
+void RN_Sport::setServoSpeed(int speed) {
+    // Constrain speed to valid range (0-255)
+    servoSpeed = constrain(speed, 0, 255);
+    Serial.print("Servo speed set to: ");
+    Serial.println(servoSpeed);
+}
+
+void RN_Sport::setTopServoAngle(int angle) {
+    if (!topServoInitialized) {
+        Serial.println("Top servo not initialized!");
+        return;
+    }
+    
+    // Constrain angle to valid range
+    angle = constrain(angle, topServoMin, topServoMax);
+    
+    // Calculate delay based on speed (faster speed = shorter delay)
+    int delayTime = map(servoSpeed, 0, 255, 50, 5);  // 50ms at slowest, 5ms at fastest
+    
+    // Move servo gradually to target angle
+    while (currentTopAngle != angle) {
+        if (currentTopAngle < angle) {
+            currentTopAngle++;
+        } else {
+            currentTopAngle--;
+        }
+        topServo.write(currentTopAngle);
+        delay(delayTime);
+    }
+}
+
+void RN_Sport::setLowServoAngle(int angle) {
+    if (!lowServoInitialized) {
+        Serial.println("Low servo not initialized!");
+        return;
+    }
+    
+    // Constrain angle to valid range
+    angle = constrain(angle, lowServoMin, lowServoMax);
+    
+    // Calculate delay based on speed (faster speed = shorter delay)
+    int delayTime = map(servoSpeed, 0, 255, 50, 5);  // 50ms at slowest, 5ms at fastest
+    
+    // Move servo gradually to target angle
+    while (currentLowAngle != angle) {
+        if (currentLowAngle < angle) {
+            currentLowAngle++;
+        } else {
+            currentLowAngle--;
+        }
+        lowServo.write(currentLowAngle);
+        delay(delayTime);
+    }
+}
+
+void RN_Sport::initializeTopServo(int pin, int defaultAngle, int minAngle, int maxAngle) {
+    // Attach top servo to its pin
+    topServo.attach(pin);
+    
+    // Store angle limits
+    topServoMin = constrain(minAngle, 0, 180);
+    topServoMax = constrain(maxAngle, 0, 180);
+    
+    // Ensure min is less than max
+    if (topServoMin > topServoMax) {
+        int temp = topServoMin;
+        topServoMin = topServoMax;
+        topServoMax = temp;
+    }
+    
+    // Store and set default angle
+    topServoDefault = constrain(defaultAngle, topServoMin, topServoMax);
+    currentTopAngle = topServoDefault;
+    topServo.write(topServoDefault);
+    
+    topServoInitialized = true;
+    Serial.print("Top servo initialized - Pin: ");
+    Serial.print(pin);
+    Serial.print(", Default: ");
+    Serial.print(topServoDefault);
+    Serial.print(", Range: ");
+    Serial.print(topServoMin);
+    Serial.print("-");
+    Serial.println(topServoMax);
+}
+
+void RN_Sport::initializeLowServo(int pin, int defaultAngle, int minAngle, int maxAngle) {
+    // Attach low servo to its pin
+    lowServo.attach(pin);
+    
+    // Store angle limits
+    lowServoMin = constrain(minAngle, 0, 180);
+    lowServoMax = constrain(maxAngle, 0, 180);
+    
+    // Ensure min is less than max
+    if (lowServoMin > lowServoMax) {
+        int temp = lowServoMin;
+        lowServoMin = lowServoMax;
+        lowServoMax = temp;
+    }
+    
+    // Store and set default angle
+    lowServoDefault = constrain(defaultAngle, lowServoMin, lowServoMax);
+    currentLowAngle = lowServoDefault;
+    lowServo.write(lowServoDefault);
+    
+    lowServoInitialized = true;
+
+}
+
+void RN_Sport::resetServos() {
+    if (topServoInitialized) {
+        setTopServoAngle(topServoDefault);
+    }
+    if (lowServoInitialized) {
+        setLowServoAngle(lowServoDefault);
+    }
 }
 
 
