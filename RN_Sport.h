@@ -92,6 +92,11 @@ public:
     bool isTopServoInitialized() { return topServoInitialized; }
     bool isLowServoInitialized() { return lowServoInitialized; }
 
+    // Distance measurement functions
+    void initializeDistanceSensor(int trigPin, int echoPin);
+    float getDistance();
+    bool isDistanceSensorInitialized() { return distanceSensorInitialized; }
+
 private:
     // MPU6050 setup
     Adafruit_MPU6050 mpu;
@@ -151,6 +156,14 @@ private:
     unsigned long lastLowServoMove;
     int currentTopAngle;
     int currentLowAngle;
+
+    // Distance sensor setup
+    int trigPin;
+    int echoPin;
+    bool distanceSensorInitialized;
+    static const int ERROR_NO_ECHO = 1;
+    bool errorState;
+    int errorCode;
 };
 
 #endif 

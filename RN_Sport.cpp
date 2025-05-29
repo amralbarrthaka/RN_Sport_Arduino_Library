@@ -671,5 +671,43 @@ void RN_Sport::resetServos() {
     }
 }
 
+void RN_Sport::initializeDistanceSensor(int trigPin, int echoPin) {
+    this->trigPin = trigPin;
+    this->echoPin = echoPin;
+    
+    // Initialize pins
+    pinMode(trigPin, OUTPUT);
+    pinMode(echoPin, INPUT);
+    
+    // Initialize state
+    distanceSensorInitialized = true;
+    errorState = false;
+    errorCode = 0;
+    
+    Serial.println("Distance sensor initialized");
+}
+
+float RN_Sport::getDistance() {
+    if (!distanceSensorInitialized) {
+        Serial.println("Distance sensor not initialized!");
+        return -1;
+    }
+    
+    // Send trigger pulse
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    // Measure echo duration
+    float duration = pulseIn(echoPin, HIGH);
+    
+    // Calculate distance using exact same formula as reference
+    float distance = (duration * 0.0343) / 2;
+    
+    return distance;
+}
+
 
 
