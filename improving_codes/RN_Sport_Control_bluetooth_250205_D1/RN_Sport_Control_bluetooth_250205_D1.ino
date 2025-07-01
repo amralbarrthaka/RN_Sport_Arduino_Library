@@ -207,6 +207,7 @@ void loop() {
     // Check for available Bluetooth data and add to command buffer
     if (Bluetooth.available()) {
         String command = Bluetooth.readStringUntil('\n');
+        Serial.print(command);
         enqueueCommand(command);
     }
 

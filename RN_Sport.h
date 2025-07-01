@@ -8,6 +8,7 @@
 #include <Adafruit_Sensor.h>
 #include "HUSKYLENS.h"
 #include <Servo.h>
+#include <SoftwareSerial.h>
 
 class RN_Sport {
 public:

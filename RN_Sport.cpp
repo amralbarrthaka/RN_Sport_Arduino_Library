@@ -5,6 +5,8 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include "HUSKYLENS.h"
+#include <Servo.h>
+#include <SoftwareSerial.h>
 
 RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int kickMotorPin, int baseSpeed) 
     : motorRight(rightMotorPin), motorLeft(leftMotorPin), motorKick(kickMotorPin), baseSpeed(baseSpeed) {
@@ -306,10 +308,18 @@ void RN_Sport::setMovementSpeed(int speed) {
     baseSpeed = constrain(speed, 0, 255);
     leftSpeed = baseSpeed;
     rightSpeed = baseSpeed;
+    motorLeft.setSpeed(leftSpeed);
+    motorRight.setSpeed(rightSpeed);
+    Serial.print("Moving Speed changed to: ");
+    Serial.println(baseSpeed);
 }
+
 
 void RN_Sport::setKickSpeed(int speed) {
     kickSpeed = constrain(speed, 0, 255);
+    motorKick.setSpeed(kickSpeed); // Update the kick motor speed immediately
+    Serial.print("Kick Speed changed to: ");
+    Serial.println(kickSpeed);
 }
 
 bool RN_Sport::directChange() {
@@ -349,14 +359,14 @@ bool RN_Sport::directChange() {
 }
 
 void RN_Sport::moveForwardWithGyro() {
-        isForward = true;
-        isBackward = false;
-        isRotating = false;
+    isForward = true;
+    isBackward = false;
+    isRotating = false;
     if (directChange()) {
         targetYaw = yaw;
-        motorLeft.run(FORWARD);
-        motorRight.run(BACKWARD);
     }
+    motorLeft.run(FORWARD);
+    motorRight.run(BACKWARD);
     
     updateGyro();  // Update current yaw
     adjustMotorSpeeds();  // Adjust speeds to maintain straight path
@@ -369,9 +379,9 @@ void RN_Sport::moveBackwardWithGyro() {
     isRotating = false;
     if (directChange()) {
         targetYaw = yaw;
-        motorLeft.run(BACKWARD);
-        motorRight.run(FORWARD);
     }
+    motorLeft.run(BACKWARD);
+    motorRight.run(FORWARD);
     
     updateGyro();  // Update current yaw
     adjustMotorSpeeds();  // Adjust speeds to maintain straight path
@@ -430,7 +440,7 @@ void RN_Sport::rotateRightWithGyro(float targetAngle) {
 }
 
 bool RN_Sport::handleRotation(float angle, MovementDirection direction) {
-    const unsigned long ROTATION_TIMEOUT = 5000;  // 5 second timeout
+    const unsigned long ROTATION_TIMEOUT = 3000;  // 5 second timeout
     const float ROTATION_TOLERANCE = 2.0;        // 2 degree tolerance
     
     unsigned long startTime = millis();
