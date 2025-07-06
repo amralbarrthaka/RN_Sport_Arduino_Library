@@ -56,6 +56,8 @@ public:
     void kickBackward();
     void stopKick();
     void setKickSpeed(int speed);
+    bool leftMotorReverse = false;  // Reverse left motor direction
+    bool rightMotorReverse = false; // Reverse right motor direction
 
     void initializeGyro();
     void updateGyro();
@@ -140,6 +142,7 @@ private:
     bool updateCameraData();  // Helper function for camera
     void correctGyro();  // Private calibration function
     bool directChange();  // Check if direction has changed
+    void process_motorDirections(String direction); // Add this line
 
     // Servo setup
     Servo topServo;
@@ -167,4 +170,4 @@ private:
     int errorCode;
 };
 
-#endif 
+#endif

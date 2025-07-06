@@ -10,6 +10,7 @@ SoftwareSerial Bluetooth(10, 8); // Arduino (RX, TX) - HC-05 Bluetooth (TX, RX)
 RN_Sport robot;
 
 
+
 int Speed = 200; // Initial speed
 int Speed_C = 255; //rotation
 
@@ -20,11 +21,11 @@ const int TOP_SERVO_PIN = 2;  // Top guide vane servo pin
 const int LOW_SERVO_PIN = 7;  // Low guide vane servo pin
 
 // Servo configuration
-const int TOP_SERVO_DEFAULT = 40;  // Center position
+const int TOP_SERVO_DEFAULT = 45;  // Center position
 const int TOP_SERVO_MIN = 40;      // Minimum angle
 const int TOP_SERVO_MAX = 75;      // Maximum angle
 
-const int LOW_SERVO_DEFAULT = 30;  // Center position
+const int LOW_SERVO_DEFAULT = 50;  // Center position
 const int LOW_SERVO_MIN = 20;      // Minimum angle
 const int LOW_SERVO_MAX = 180;     // Maximum angle
 
@@ -86,6 +87,8 @@ void setup() {
     
     // Set movement speed (0-255)
     robot.setMovementSpeed(Speed);
+    robot.leftMotorReverse = true;
+    robot.rightMotorReverse = true;
     robot.setKickSpeed(Speed_C);
 
     // Set servo speed BEFORE initializing servos
@@ -183,28 +186,28 @@ void loop() {
     // Existing direction handling code...
     if (direction == "d,f") {
         robot.moveForwardWithGyro();
-        Serial.println("Forward");
+        // Serial.println("Forward");
     } else if (direction == "d,b") {
-        robot.moveBackwardWithGyro();
-        Serial.println("Backward");
+        robot.moveBackwardWithGyro();                                            
+        // Serial.println("Backward");
     } else if (direction == "d,l") {
         robot.rotateLeftWithGyro(90);
-        Serial.println("Left");
+        // Serial.println("Left");
     } else if (direction == "d,r") {
         robot.rotateRightWithGyro(90);
-        Serial.println("Right");
+        // Serial.println("Right");
     } else if (direction == "d,fl") {
         robot.rotateLeftWithGyro(10);
-        Serial.println("fl");
+        // Serial.println("fl");
     } else if (direction == "d,fr") {
         robot.rotateRightWithGyro(10);
-        Serial.println("fr");
+        // Serial.println("fr");
     } else if (direction == "d,bl") {
         robot.rotateRightWithGyro(10);
-        Serial.println("bl");
+        // Serial.println("bl");
     } else if (direction == "d,br") {
         robot.rotateLeftWithGyro(10);
-        Serial.println("br");
+        // Serial.println("br");
     } else if (direction == "d,s") {
         robot.stopMotors();
     }

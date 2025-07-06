@@ -35,6 +35,8 @@ RN_Sport::RN_Sport(int leftMotorPin, int rightMotorPin, int kickMotorPin, int ba
     servoSpeed = 255;  // Default to fastest speed
     currentTopAngle = 0;
     currentLowAngle = 0;
+    bool leftMotorReverse = false;  // Reverse left motor direction
+    bool rightMotorReverse = false; // Reverse right motor direction
 }
 
 bool RN_Sport::begin() {
@@ -158,16 +160,34 @@ void RN_Sport::adjustMotorSpeeds() {
 
     // Apply correction based on movement direction
     if (isForward) {
-        leftSpeed = baseSpeed - correction;  // Reduce left speed if turning right
-        rightSpeed = baseSpeed + correction; // Increase right speed if turning right
+        if (leftMotorReverse){
+            leftSpeed = baseSpeed - correction; 
+        }else{
+            leftSpeed = baseSpeed + correction; 
+        }
+        if (rightMotorReverse){
+            rightSpeed = baseSpeed + correction;
+        }else{
+                rightSpeed = baseSpeed - correction; 
+        }
+   
     } else if (isBackward) {
-        leftSpeed = baseSpeed + correction;  // Increase left speed if turning right
-        rightSpeed = baseSpeed - correction; // Reduce right speed if turning right
+        if (leftMotorReverse){
+            leftSpeed = baseSpeed + correction; 
+        }else{
+            leftSpeed = baseSpeed - correction; 
+        }
+        if (rightMotorReverse){
+            rightSpeed = baseSpeed - correction;
+        }else{
+                rightSpeed = baseSpeed + correction; 
+        }
     }
 
     // Ensure speeds stay within valid range
     leftSpeed = constrain(leftSpeed, 0, 255);
     rightSpeed = constrain(rightSpeed, 0, 255);
+    
 
     // Apply calculated speeds to motors
     motorLeft.setSpeed(leftSpeed);
@@ -178,16 +198,14 @@ void RN_Sport::moveForward() {
     isForward = true;
     isBackward = false;
     isRotating = false;
-    motorLeft.run(FORWARD);
-    motorRight.run(BACKWARD);
+    this->process_motorDirections("forward");
 }
 
 void RN_Sport::moveBackward() {
     isForward = false;
     isBackward = true;
     isRotating = false;
-    motorLeft.run(BACKWARD);
-    motorRight.run(FORWARD);
+    this->process_motorDirections("backward");
 }
 
 void RN_Sport::stopMotors() {
@@ -203,8 +221,7 @@ void RN_Sport::rotateLeft() {
     isForward = false;
     isBackward = false;
     isRotating = true;
-    motorLeft.run(BACKWARD);
-    motorRight.run(BACKWARD);
+    this->process_motorDirections("left");
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
 }
@@ -213,8 +230,7 @@ void RN_Sport::rotateRight() {
     isForward = false;
     isBackward = false;
     isRotating = true;
-    motorLeft.run(FORWARD);
-    motorRight.run(FORWARD);
+    this->process_motorDirections("right");
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
 }
@@ -358,6 +374,74 @@ bool RN_Sport::directChange() {
     return false;
 }
 
+void RN_Sport::process_motorDirections(String direction) {
+    if (direction == "forward") {
+        if (leftMotorReverse && rightMotorReverse) {
+            motorLeft.run(BACKWARD);
+            motorRight.run(BACKWARD);
+        } else if (leftMotorReverse) {
+            motorLeft.run(BACKWARD);
+            motorRight.run(FORWARD);
+        } else if (rightMotorReverse) {
+            motorLeft.run(FORWARD);
+            motorRight.run(BACKWARD);
+        } else {
+            // Default case, both motors run forward
+            motorLeft.run(FORWARD);
+            motorRight.run(FORWARD);
+        }
+    } else if (direction == "backward") {
+        if (leftMotorReverse && rightMotorReverse) {
+            motorLeft.run(FORWARD);
+            motorRight.run(FORWARD);
+        } else if (leftMotorReverse) {
+            motorLeft.run(FORWARD);
+            motorRight.run(BACKWARD);
+        } else if (rightMotorReverse) {
+            motorLeft.run(BACKWARD);
+            motorRight.run(FORWARD);
+        } else {
+            // Default case, both motors run backward
+            motorLeft.run(BACKWARD);
+            motorRight.run(BACKWARD);
+        }
+
+    }else if (direction == "left") {
+        if (leftMotorReverse && rightMotorReverse) {
+            motorLeft.run(FORWARD);
+            motorRight.run(BACKWARD);
+        } else if (leftMotorReverse) {
+            motorLeft.run(FORWARD);
+            motorRight.run(FORWARD);
+        } else if (rightMotorReverse) {
+            motorLeft.run(BACKWARD);
+            motorRight.run(BACKWARD);
+        } else {
+            // Default case, left motor backward, right motor forward
+            motorLeft.run(BACKWARD);
+            motorRight.run(FORWARD);
+        }
+    } else if (direction == "right") {
+        if (leftMotorReverse && rightMotorReverse) {
+            motorLeft.run(BACKWARD);
+            motorRight.run(FORWARD);
+        } else if (leftMotorReverse) {
+            motorLeft.run(BACKWARD);
+            motorRight.run(BACKWARD);
+        } else if (rightMotorReverse) {
+            motorLeft.run(FORWARD);
+            motorRight.run(FORWARD);
+        } else {
+            // Default case, left motor forward, right motor backward
+            motorLeft.run(FORWARD);
+            motorRight.run(BACKWARD);
+        }
+    } else {
+        // Stop motors for any other direction
+        stopMotors();
+    }
+}
+
 void RN_Sport::moveForwardWithGyro() {
     isForward = true;
     isBackward = false;
@@ -365,9 +449,8 @@ void RN_Sport::moveForwardWithGyro() {
     if (directChange()) {
         targetYaw = yaw;
     }
-    motorLeft.run(FORWARD);
-    motorRight.run(BACKWARD);
-    
+    this->process_motorDirections("forward");  // Process motor directions based on reverse flags
+
     updateGyro();  // Update current yaw
     adjustMotorSpeeds();  // Adjust speeds to maintain straight path
     printGyroMotorStatus();  // Print status information
@@ -380,8 +463,7 @@ void RN_Sport::moveBackwardWithGyro() {
     if (directChange()) {
         targetYaw = yaw;
     }
-    motorLeft.run(BACKWARD);
-    motorRight.run(FORWARD);
+    this->process_motorDirections("backward");  // Process motor directions based on reverse flags
     
     updateGyro();  // Update current yaw
     adjustMotorSpeeds();  // Adjust speeds to maintain straight path
@@ -396,11 +478,15 @@ void RN_Sport::rotateLeftWithGyro(float targetAngle) {
     
     // Calculate target angle with proper normalization
     // For left rotation, we subtract the angle (clockwise)
-    targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);
+    if (leftMotorReverse){
+            targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);
+    }else{
+         targetYaw = fmod(yaw + targetAngle + 360.0, 360.0);
+    }
+   
     
     // Set motor directions and speeds
-    motorLeft.run(BACKWARD);
-    motorRight.run(BACKWARD);
+    this->process_motorDirections("left");
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
     
@@ -421,12 +507,15 @@ void RN_Sport::rotateRightWithGyro(float targetAngle) {
     
     // Calculate target angle with proper normalization
     // For right rotation, we add the angle (counter-clockwise)
-    targetYaw = fmod(yaw + targetAngle + 360.0, 360.0);
+    if (leftMotorReverse){
+            targetYaw = fmod(yaw + targetAngle + 360.0, 360.0);
+    }else{
+         targetYaw = fmod(yaw - targetAngle + 360.0, 360.0);
+    }
     
     // Set motor directions and speeds
     // For right rotation, left motor forward, right motor backward
-    motorLeft.run(FORWARD);
-    motorRight.run(FORWARD);
+    this->process_motorDirections("right");
     motorLeft.setSpeed(baseSpeed);
     motorRight.setSpeed(baseSpeed);
     
@@ -440,7 +529,7 @@ void RN_Sport::rotateRightWithGyro(float targetAngle) {
 }
 
 bool RN_Sport::handleRotation(float angle, MovementDirection direction) {
-    const unsigned long ROTATION_TIMEOUT = 3000;  // 5 second timeout
+    const unsigned long ROTATION_TIMEOUT = 300000;  // 5 second timeout
     const float ROTATION_TOLERANCE = 2.0;        // 2 degree tolerance
     
     unsigned long startTime = millis();
@@ -464,14 +553,18 @@ bool RN_Sport::checkRotationComplete(float tolerance) {
     float angleError = yaw - targetYaw;
     
     // Normalize angle error to [-180, 180]
-    if (angleError > 180) angleError -= 360;
-    if (angleError < -180) angleError += 360;
+    if (angleError > 180) angleError -= 180;
+    if (angleError < -180) angleError += 180;
     
     // Check if we're within tolerance and log the error for debugging
     bool isComplete = abs(angleError) <= tolerance;
     if (!isComplete) {
         Serial.print("Angle error: ");
-        Serial.println(angleError);
+        Serial.print(angleError);
+        Serial.print("  Target yaw: ");
+        Serial.print(targetYaw);
+        Serial.print("  Current yaw: ");
+        Serial.println(yaw);
     }
     
     return isComplete;

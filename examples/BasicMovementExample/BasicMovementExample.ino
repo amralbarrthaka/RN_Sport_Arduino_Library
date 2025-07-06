@@ -23,6 +23,7 @@ RN_Sport robot;
 
 
 
+
 void setup() {
     // Initialize Serial communication
     Serial.begin(115200);
@@ -42,6 +43,8 @@ void setup() {
     
     // Set base speed
     robot.setMovementSpeed(150);  // Set to 150 (0-255)
+    robot.leftMotorReverse = true;
+    robot.rightMotorReverse = true;
     
     // Wait for sensor to stabilize
     delay(1000);
